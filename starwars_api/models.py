@@ -3,7 +3,6 @@ from starwars_api.exceptions import SWAPIClientError
 
 api_client = SWAPIClient()
 
-
 class BaseModel(object):
 
     def __init__(self, json_data):
@@ -11,7 +10,7 @@ class BaseModel(object):
         Dynamically assign all attributes in `json_data` as instance
         attributes of the Model.
         """
-        pass
+        self.json_data = json_data
 
     @classmethod
     def get(cls, resource_id):
@@ -19,7 +18,7 @@ class BaseModel(object):
         Returns an object of current Model requesting data to SWAPI using
         the api_client.
         """
-        pass
+        return cls(resources[cls.RESOURCE_NAME](resource_id))
 
     @classmethod
     def all(cls):
@@ -28,7 +27,10 @@ class BaseModel(object):
         later in charge of performing requests to SWAPI for each of the
         pages while looping.
         """
-        pass
+        return inquirers[cls.RESOURCE_NAME]()
+    
+    def __getattr__(self,field):
+        return self.json_data[field]
 
 
 class People(BaseModel):
@@ -55,31 +57,23 @@ class Films(BaseModel):
 class BaseQuerySet(object):
 
     def __init__(self):
-        pass
+        self.json_data = resources[self.RESOURCE_NAME]()
+        
+    def count(self):
+        return self.json_data['count']
 
     def __iter__(self):
-        pass
-
-    def __next__(self):
-        """
-        Must handle requests to next pages in SWAPI when objects in the current
-        page were all consumed.
-        """
-        pass
-
-    next = __next__
-
-    def count(self):
-        """
-        Returns the total count of objects of current model.
-        If the counter is not persisted as a QuerySet instance attr,
-        a new request is performed to the API in order to get it.
-        """
-        pass
-
+        p = 1
+        current = self.json_data
+        yield from (self.constructor(res) for res in current['results'])
+        while current['next']:
+            p += 1
+            current = resources[self.RESOURCE_NAME](page = p)
+            yield from (self.constructor(res) for res in current['results'])
 
 class PeopleQuerySet(BaseQuerySet):
     RESOURCE_NAME = 'people'
+    constructor = People
 
     def __init__(self):
         super(PeopleQuerySet, self).__init__()
@@ -90,9 +84,13 @@ class PeopleQuerySet(BaseQuerySet):
 
 class FilmsQuerySet(BaseQuerySet):
     RESOURCE_NAME = 'films'
+    constructor = Films
 
     def __init__(self):
         super(FilmsQuerySet, self).__init__()
 
     def __repr__(self):
         return 'FilmsQuerySet: {0} objects'.format(str(len(self.objects)))
+
+resources = {'people':api_client.get_people, 'films':api_client.get_films}
+inquirers = {'people':PeopleQuerySet, 'films':FilmsQuerySet}
