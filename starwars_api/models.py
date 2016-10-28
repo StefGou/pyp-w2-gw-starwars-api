@@ -65,11 +65,13 @@ class BaseQuerySet(object):
     def __iter__(self):
         p = 1
         current = self.json_data
-        yield from (self.constructor(res) for res in current['results'])
+        for res in current['results']:
+            yield self.constructor(res)
         while current['next']:
             p += 1
             current = resources[self.RESOURCE_NAME](page = p)
-            yield from (self.constructor(res) for res in current['results'])
+            for res in current['results']:
+                yield self.constructor(res)
 
 class PeopleQuerySet(BaseQuerySet):
     RESOURCE_NAME = 'people'
